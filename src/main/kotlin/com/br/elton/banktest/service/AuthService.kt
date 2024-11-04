@@ -6,6 +6,7 @@ import com.br.elton.banktest.exception.ErrorMessages
 import com.br.elton.banktest.repository.AccountRepository
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.SignatureAlgorithm
+import io.jsonwebtoken.security.Keys
 import java.util.Base64
 import org.springframework.http.HttpStatus
 import java.util.*
@@ -22,7 +23,7 @@ class AuthService (
     private val accountRepository: AccountRepository
 ){
     private val logger = LoggerFactory.getLogger(AccountService::class.java)
-    private val secretKey = "mySecretKey"
+    private val secretKey = Keys.secretKeyFor(SignatureAlgorithm.HS512)
 
     /**
      * Valida a conta, confirmando se a senha está correta e também gera um Token JWT para utilizar nas outras chamadas,
@@ -45,7 +46,7 @@ class AuthService (
         val token = Jwts.builder()
             .setSubject(accountNumber)
             .setExpiration(Date(System.currentTimeMillis() + (60 * 60 * 3000)))
-            .signWith(SignatureAlgorithm.HS512, Base64.getEncoder().encodeToString(secretKey.toByteArray()))
+            .signWith(secretKey)
             .compact()
 
         logger.info("Account authenticated successfully: $accountNumber")
@@ -64,8 +65,9 @@ class AuthService (
         if (transactionDTO.accountNumber.isNullOrBlank()) throw CustomException(HttpStatus.BAD_REQUEST, ErrorMessages.ACCOUNT_NOT_INFORMED)
         return try {
             val tokenWithoutBearer = token.removePrefix("Bearer ").trim()
-            val claims = Jwts.parser()
-                .setSigningKey(secretKey.toByteArray())
+            val claims = Jwts.parserBuilder()
+                .setSigningKey(secretKey)
+                .build()
                 .parseClaimsJws(tokenWithoutBearer)
                 .body
             (!claims.subject.isNullOrBlank() && claims.subject.equals(transactionDTO.accountNumber))
